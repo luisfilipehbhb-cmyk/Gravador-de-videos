@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravador de Vídeo com Takes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .video-play-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .video-play-overlay.show {
+            opacity: 1;
+        }
+
+        .play-button {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: #667eea;
+            padding-left: 8px;
+        }
+
+        .recording-indicator {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .recording-indicator.active {
+            display: flex;
+        }
+
+        .rec-dot {
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .timer {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+            min-width: 140px;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button:not(:disabled):hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-record {
+            background: #ef4444;
+        }
+
+        .btn-pause {
+            background: #f59e0b;
+        }
+
+        .btn-continue {
+            background: #10b981;
+        }
+
+        .btn-stop {
+            background: #3b82f6;
+        }
+
+        .btn-delete {
+            background: #dc2626;
+        }
+
+        .btn-download {
+            background: #10b981;
+        }
+
+        .btn-separator {
+            background: #8b5cf6;
+        }
+
+        .takes-info {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .takes-info h3 {
+            color: #374151;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .take-list {
+            list-style: none;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .take-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .take-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .take-list::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+
+        .take-list::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .take-item {
+            background: white;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #667eea;
+        }
+
+        .take-item.deleted {
+            opacity: 0.5;
+            text-decoration: line-through;
+            border-left-color: #ef4444;
+        }
+
+        .take-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-restore-take {
+            background: #f59e0b;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn-restore-take:hover {
+            background: #d97706;
+            transform: scale(1.1);
+        }
+
+        .btn-restore-take:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .btn-download-take {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn-download-take:hover {
+            background: #059669;
+            transform: scale(1.1);
+        }
+
+        .btn-download-take:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .btn-download-take.downloaded {
+            background: #e5e7eb;
+            color: #10b981;
+        }
+
+        .btn-download-take.downloaded:hover {
+            background: #d1d5db;
+            transform: scale(1.1);
+        }
+
+        .btn-delete-take {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn-delete-take:hover {
+            background: #dc2626;
+            transform: scale(1.1);
+        }
+
+        .btn-delete-take:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .preview-container {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .preview-container.active {
+            display: block;
+        }
+
+        .preview-container h3 {
+            color: #374151;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .playlist-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f3f4f6;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #374151;
+        }
+
+        .playlist-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-playlist {
+            background: #6366f1;
+            padding: 10px 20px;
+            font-size: 14px;
+            min-width: 120px;
+        }
+
+        .btn-restart {
+            background: #8b5cf6;
+            padding: 10px 20px;
+            font-size: 14px;
+            min-width: 150px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Gravador de Vídeo com Takes</h1>
+
+        <div class="video-container">
+            <video id="cameraPreview" autoplay muted playsinline></video>
+            <div class="recording-indicator" id="recordingIndicator">
+                <div class="rec-dot"></div>
+                <span>GRAVANDO</span>
+            </div>
+            <div class="timer" id="timer">00:00</div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-record" id="btnRecord">▶ Gravar</button>
+            <button class="btn-download" id="btnDownload" disabled>⬇ Baixar Todos os Takes</button>
+            <button class="btn-separator" id="btnSeparator">📁 Separador de Galeria</button>
+        </div>
+
+        <div class="takes-info">
+            <h3>Takes Gravados</h3>
+            <ul class="take-list" id="takeList">
+                <li style="color: #9ca3af; font-style: italic;">Nenhum take gravado ainda</li>
+            </ul>
+        </div>
+
+        <div class="preview-container" id="previewContainer">
+            <h3>Preview dos Takes</h3>
+            <div class="playlist-info" id="playlistInfo">
+                <span>Tocando: <strong id="currentTakeName">-</strong></span>
+                <span id="playlistProgress">0 / 0</span>
+            </div>
+            <div class="video-container">
+                <video id="videoPreview"></video>
+                <div class="video-play-overlay" id="playOverlay">
+                    <div class="play-button">▶</div>
+                </div>
+            </div>
+            <div class="playlist-controls">
+                <button class="btn-playlist" id="btnPrevTake">⏮ Anterior</button>
+                <button class="btn-playlist" id="btnNextTake">⏭ Próximo</button>
+                <button class="btn-restart" id="btnRestartPlaylist">🔄 Reiniciar Playlist</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log('=== SCRIPT INICIADO ===');
+        console.log('Timestamp:', new Date().toISOString());
+        
+        let mediaRecorder;
+        let stream;
+        let takes = []; // Array de takes: {chunks: [], deleted: false}
+        let currentTakeChunks = [];
+        let finalVideoBlob = null;
+        let isRecording = false;
+        let startTime;
+        let timerInterval;
+        let elapsedTime = 0;
+        
+        // Controle de playlist
+        let currentPlayingIndex = 0;
+        let playlistUrls = [];
+
+        const cameraPreview = document.getElementById('cameraPreview');
+        const btnRecord = document.getElementById('btnRecord');
+        const btnDownload = document.getElementById('btnDownload');
+        const btnSeparator = document.getElementById('btnSeparator');
+        const recordingIndicator = document.getElementById('recordingIndicator');
+        const timer = document.getElementById('timer');
+        const takeList = document.getElementById('takeList');
+        const previewContainer = document.getElementById('previewContainer');
+        const videoPreview = document.getElementById('videoPreview');
+        const playOverlay = document.getElementById('playOverlay');
+        const currentTakeName = document.getElementById('currentTakeName');
+        const playlistProgress = document.getElementById('playlistProgress');
+        const btnPrevTake = document.getElementById('btnPrevTake');
+        const btnNextTake = document.getElementById('btnNextTake');
+        const btnRestartPlaylist = document.getElementById('btnRestartPlaylist');
+
+        // Inicializar câmera
+        async function initCamera() {
+            console.log('initCamera() chamada');
+            try {
+                console.log('Tentando acessar câmera traseira...');
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } },
+                    audio: true
+                });
+                cameraPreview.srcObject = stream;
+                console.log('✓ Câmera traseira inicializada');
+            } catch (error) {
+                console.error('✗ Erro ao acessar câmera traseira:', error);
+                try {
+                    console.log('Tentando câmera frontal...');
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: true
+                    });
+                    cameraPreview.srcObject = stream;
+                    console.log('✓ Câmera frontal inicializada (fallback)');
+                } catch (error2) {
+                    console.error('✗ Erro ao acessar qualquer câmera:', error2);
+                    alert('Erro ao acessar a câmera. Verifique as permissões.');
+                }
+            }
+        }
+
+        function showStatus(message, type) {
+            // Função vazia - não mostra mais mensagens
+            console.log(`[${type}] ${message}`);
+        }
+
+        function updateTimer() {
+            const totalSeconds = Math.floor(elapsedTime / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            timer.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function startTimer() {
+            startTime = Date.now() - elapsedTime;
+            timerInterval = setInterval(() => {
+                elapsedTime = Date.now() - startTime;
+                updateTimer();
+            }, 100);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+        }
+
+        function updateTakeList() {
+            takeList.innerHTML = '';
+            if (takes.length === 0) {
+                takeList.innerHTML = '<li style="color: #9ca3af; font-style: italic;">Nenhum take gravado ainda</li>';
+            } else {
+                // Não inverter - mostrar na ordem que foram gravados (novos embaixo)
+                takes.forEach((take, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'take-item' + (take.deleted ? ' deleted' : '');
+                    
+                    const info = document.createElement('span');
+                    info.innerHTML = `Take ${index + 1} (${take.chunks.length} chunks) ${take.deleted ? '❌ Excluído' : ''}`;
+                    
+                    const actions = document.createElement('div');
+                    actions.className = 'take-actions';
+                    
+                    const btnDownload = document.createElement('button');
+                    btnDownload.className = 'btn-download-take' + (take.downloaded ? ' downloaded' : '');
+                    btnDownload.textContent = take.downloaded ? '✅' : '⬇';
+                    btnDownload.disabled = take.deleted;
+                    btnDownload.title = take.downloaded ? 'Já baixado' : 'Baixar este take';
+                    btnDownload.onclick = () => downloadSingleTake(index);
+                    
+                    const btnDelete = document.createElement('button');
+                    btnDelete.className = 'btn-delete-take';
+                    btnDelete.textContent = '✕';
+                    btnDelete.disabled = take.deleted;
+                    btnDelete.title = 'Excluir este take';
+                    btnDelete.onclick = () => deleteTake(index);
+                    
+                    const btnRestore = document.createElement('button');
+                    btnRestore.className = 'btn-restore-take';
+                    btnRestore.textContent = '↩️';
+                    btnRestore.disabled = !take.deleted;
+                    btnRestore.title = 'Restaurar este take';
+                    btnRestore.onclick = () => restoreTake(index);
+                    
+                    actions.appendChild(btnDownload);
+                    actions.appendChild(btnDelete);
+                    actions.appendChild(btnRestore);
+                    
+                    li.appendChild(info);
+                    li.appendChild(actions);
+                    takeList.appendChild(li);
+                });
+            }
+        }
+        
+        function restoreTake(index) {
+            console.log('Restaurando take', index + 1);
+            takes[index].deleted = false;
+            updateTakeList();
+            
+            // Recriar a playlist com o take restaurado
+            rebuildPlaylist();
+            
+            showStatus(`Take ${index + 1} restaurado!`, 'success');
+        }
+        
+        function downloadSingleTake(index) {
+            console.log('=== DOWNLOAD INDIVIDUAL ===');
+            console.log('Índice:', index);
+            console.log('Total de takes:', takes.length);
+            
+            const take = takes[index];
+            
+            if (!take) {
+                console.error('Take não encontrado no índice', index);
+                showStatus('Erro: take não encontrado!', 'error');
+                return;
+            }
+            
+            if (take.deleted) {
+                console.log('Take está excluído');
+                showStatus('Este take foi excluído!', 'error');
+                return;
+            }
+            
+            console.log('Chunks no take:', take.chunks.length);
+            
+            const blob = new Blob(take.chunks, { type: 'video/webm' });
+            console.log('Blob criado:', blob.size, 'bytes');
+            
+            const url = URL.createObjectURL(blob);
+            console.log('URL criada:', url);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `take_${index + 1}_${Date.now()}.webm`;
+            document.body.appendChild(a);
+            
+            console.log('Iniciando download...');
+            a.click();
+            
+            // Marcar como baixado
+            takes[index].downloaded = true;
+            updateTakeList();
+            
+            // Aguardar um pouco antes de limpar
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                console.log('✓ Download do take', index + 1, 'concluído');
+            }, 1000);
+            
+            showStatus(`Take ${index + 1} baixado!`, 'success');
+        }
+        
+        function deleteTake(index) {
+            console.log('Excluindo take', index + 1);
+            takes[index].deleted = true;
+            updateTakeList();
+            
+            // Recriar a playlist sem o take excluído
+            rebuildPlaylist();
+            
+            showStatus(`Take ${index + 1} excluído!`, 'info');
+        }
+        
+        function rebuildPlaylist() {
+            console.log('=== RECONSTRUINDO PLAYLIST ===');
+            
+            // Limpar URLs antigas
+            playlistUrls.forEach(item => URL.revokeObjectURL(item.url));
+            playlistUrls = [];
+            
+            // Criar URLs para cada take não excluído
+            takes.forEach((take, index) => {
+                if (!take.deleted) {
+                    const blob = new Blob(take.chunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    playlistUrls.push({
+                        url: url,
+                        name: `Take ${index + 1}`,
+                        index: index,
+                        blob: blob
+                    });
+                }
+            });
+            
+            console.log('Playlist reconstruída com', playlistUrls.length, 'takes');
+            
+            if (playlistUrls.length > 0) {
+                // Garantir que o preview está visível
+                previewContainer.classList.add('active');
+                btnDownload.disabled = false;
+                
+                // Se estava tocando algo, ajustar o índice
+                if (currentPlayingIndex >= playlistUrls.length) {
+                    currentPlayingIndex = 0;
+                }
+                
+                console.log('Tocando take no índice:', currentPlayingIndex);
+                playTake(currentPlayingIndex);
+            } else {
+                // Se não há mais takes, limpar preview
+                videoPreview.src = '';
+                currentTakeName.textContent = '-';
+                playlistProgress.textContent = '0 / 0';
+                previewContainer.classList.remove('active');
+                btnDownload.disabled = true;
+                showStatus('Nenhum take ativo restante.', 'info');
+            }
+        }
+
+        function createMediaRecorder() {
+            currentTakeChunks = [];
+            
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm;codecs=vp9,opus'
+            });
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    currentTakeChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                console.log('MediaRecorder parou. Chunks capturados:', currentTakeChunks.length);
+            };
+
+            mediaRecorder.start(100);
+            console.log('Novo MediaRecorder criado e iniciado');
+        }
+
+        btnRecord.addEventListener('click', () => {
+            if (!isRecording) {
+                // INICIAR GRAVAÇÃO
+                console.log('=== GRAVAR CLICADO ===');
+                createMediaRecorder();
+                
+                isRecording = true;
+                recordingIndicator.classList.add('active');
+                btnRecord.textContent = '⏹ Parar';
+                btnRecord.style.background = '#3b82f6';
+                
+                startTimer();
+                showStatus('Gravação iniciada!', 'info');
+            } else {
+                // PARAR GRAVAÇÃO
+                console.log('=== PARAR CLICADO ===');
+                
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                    
+                    setTimeout(() => {
+                        // Salvar o take
+                        if (currentTakeChunks.length > 0) {
+                            takes.push({
+                                chunks: [...currentTakeChunks],
+                                deleted: false,
+                                downloaded: false
+                            });
+                            console.log('Take salvo com', currentTakeChunks.length, 'chunks');
+                        }
+                        
+                        updateTakeList();
+                        finalizeRecording();
+                    }, 200);
+                }
+            }
+        });
+
+        async function finalizeRecording() {
+            console.log('=== FINALIZANDO ===');
+            
+            isRecording = false;
+            recordingIndicator.classList.remove('active');
+            
+            btnRecord.textContent = '▶ Gravar';
+            btnRecord.style.background = '#ef4444';
+            
+            stopTimer();
+            elapsedTime = 0;
+            updateTimer();
+            
+            // Criar URLs para cada take não excluído
+            playlistUrls = [];
+            takes.forEach((take, index) => {
+                console.log(`Take ${index + 1}:`, take.deleted ? 'EXCLUÍDO' : 'ATIVO', `(${take.chunks.length} chunks)`);
+                if (!take.deleted) {
+                    const blob = new Blob(take.chunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    playlistUrls.push({
+                        url: url,
+                        name: `Take ${index + 1}`,
+                        index: index,
+                        blob: blob
+                    });
+                }
+            });
+            
+            console.log('Playlist criada com', playlistUrls.length, 'takes');
+            console.log('previewContainer:', previewContainer);
+            
+            if (playlistUrls.length > 0) {
+                console.log('Ativando preview...');
+                previewContainer.classList.add('active');
+                console.log('Classes do preview:', previewContainer.className);
+                btnDownload.disabled = false;
+                
+                // Iniciar playlist
+                currentPlayingIndex = 0;
+                playTake(0);
+                
+                showStatus(`Playlist criada! ${playlistUrls.length} takes ativos.`, 'success');
+            } else {
+                console.log('Nenhum take ativo');
+                showStatus('Nenhum take válido para criar playlist.', 'error');
+            }
+        }
+        
+        function playTake(index, autoplay = false) {
+            if (index < 0 || index >= playlistUrls.length) return;
+            
+            currentPlayingIndex = index;
+            const take = playlistUrls[index];
+            
+            videoPreview.src = take.url;
+            currentTakeName.textContent = take.name;
+            playlistProgress.textContent = `${index + 1} / ${playlistUrls.length}`;
+            
+            // Se autoplay for true, dar play automaticamente
+            if (autoplay) {
+                videoPreview.play().catch(err => {
+                    console.log('Autoplay bloqueado:', err);
+                });
+            }
+            
+            console.log('Tocando:', take.name, autoplay ? '(autoplay)' : '(pausado)');
+        }
+        
+        // Quando um take terminar, tocar o próximo automaticamente
+        videoPreview.addEventListener('ended', () => {
+            console.log('Take terminou, tocando próximo...');
+            playOverlay.classList.add('show');
+            if (currentPlayingIndex < playlistUrls.length - 1) {
+                playTake(currentPlayingIndex + 1, true); // true = autoplay
+            } else {
+                console.log('Playlist finalizada');
+                showStatus('Playlist finalizada!', 'success');
+            }
+        });
+
+        // Mostrar overlay quando pausar
+        videoPreview.addEventListener('pause', () => {
+            playOverlay.classList.add('show');
+        });
+
+        // Esconder overlay quando tocar
+        videoPreview.addEventListener('play', () => {
+            playOverlay.classList.remove('show');
+        });
+
+        // Clicar no vídeo OU no overlay para alternar play/pause
+        const togglePlayPause = (e) => {
+            e.stopPropagation();
+            
+            if (videoPreview.paused) {
+                videoPreview.play().catch(err => {
+                    console.log('Erro ao dar play:', err);
+                });
+                console.log('▶️ Play');
+            } else {
+                videoPreview.pause();
+                console.log('⏸ Pause');
+            }
+        };
+
+        videoPreview.addEventListener('click', togglePlayPause);
+        playOverlay.addEventListener('click', togglePlayPause);
+        
+        // Permitir clique no overlay
+        playOverlay.style.pointerEvents = 'auto';
+
+        
+        btnPrevTake.addEventListener('click', () => {
+            if (currentPlayingIndex > 0) {
+                playTake(currentPlayingIndex - 1, true); // true = dar play
+            }
+        });
+        
+        btnNextTake.addEventListener('click', () => {
+            if (currentPlayingIndex < playlistUrls.length - 1) {
+                playTake(currentPlayingIndex + 1, true); // true = dar play
+            }
+        });
+        
+        btnRestartPlaylist.addEventListener('click', () => {
+            playTake(0, true); // true = dar play ao reiniciar
+        });
+
+        btnDownload.addEventListener('click', async () => {
+            console.log('=== BAIXAR TODOS OS TAKES ===');
+            
+            if (playlistUrls.length === 0) {
+                showStatus('Erro: nenhum take disponível!', 'error');
+                return;
+            }
+            
+            console.log('Baixando', playlistUrls.length, 'takes...');
+            showStatus(`Iniciando download de ${playlistUrls.length} takes...`, 'info');
+            
+            // Baixar um por vez com delay
+            for (let i = 0; i < playlistUrls.length; i++) {
+                const take = playlistUrls[i];
+                
+                // Aguardar delay antes de cada download (exceto o primeiro)
+                if (i > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                
+                const a = document.createElement('a');
+                a.href = take.url;
+                a.download = `take_${take.index + 1}_${Date.now()}.webm`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                console.log(`✓ Download ${i + 1}/${playlistUrls.length}: ${take.name}`);
+                showStatus(`Baixando: ${take.name} (${i + 1}/${playlistUrls.length})`, 'info');
+            }
+            
+            showStatus(`✓ ${playlistUrls.length} takes baixados!`, 'success');
+        });
+
+        // Botão Separador de Galeria
+        btnSeparator.addEventListener('click', () => {
+            console.log('=== BAIXANDO SEPARADOR ===');
+            
+            // Criar canvas para gerar imagem PNG
+            const canvas = document.createElement('canvas');
+            canvas.width = 1080;
+            canvas.height = 1920;
+            const ctx = canvas.getContext('2d');
+            
+            // Fundo verde
+            ctx.fillStyle = '#10b981';
+            ctx.fillRect(0, 0, 1080, 1920);
+            
+            // Texto branco
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 100px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('SEPARADOR', 540, 960);
+            
+            // Converter canvas para blob PNG
+            canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `separador_${Date.now()}.png`;
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 1000);
+                
+                showStatus('Separador de galeria baixado!', 'success');
+            }, 'image/png');
+        });
+
+        // Inicializar
+        console.log('Chamando initCamera()...');
+        initCamera();
+    </script>
+</body>
+</html>
